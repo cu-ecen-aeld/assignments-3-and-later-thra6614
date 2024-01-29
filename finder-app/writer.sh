@@ -4,7 +4,7 @@ file_name=$1
 input_str=$2
 argc=$#
 
-if [ $argc -ne 2 ]; then #fail i
+if [ $argc -ne 2 ]; then #fail
 	echo "ERROR: Invalid Number of Arguments. Expected: 2, Received: $argc"
 	exit 1
 fi
