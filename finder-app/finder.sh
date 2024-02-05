@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/sh
 file_dir=$1
 search_str=$2
 argc=$#
