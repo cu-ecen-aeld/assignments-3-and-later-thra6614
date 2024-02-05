@@ -1,6 +1,7 @@
 #!/bin/bash
 # Script outline to install and build kernel.
 # Author: Siddhant Jajoo.
+# Got help from Kanin McGuire whose library dependency code and sudo kernel build steps were copied. I had no clue how to grab and integrate the library files assuming the previous functions' outputs were needed. There was a different direction with symbolic linking that was used but then changed to what we have now. The sudo updates were picked up from not understanding where in the slides the kernel build instructions were and then being told we needed to include sudo apt-get instructions.
 
 set -e
 set -u
