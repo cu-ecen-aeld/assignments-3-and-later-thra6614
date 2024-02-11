@@ -17,7 +17,7 @@ void* threadfunc(void* thread_param)
     usleep(thread_func_args->wait_get * 1000); 						//sleep for wait_get milliseconds
     int rc = pthread_mutex_lock(thread_func_args->mutex); 			//obtain mutex
     if(rc != 0){
-    	ERROR_LOG("pthread_mutex_lock failed with %d\n", rc);
+    	//ERROR_LOG("pthread_mutex_lock failed with %d\n", rc);		//realized after tagging that logging this would cause race condition
     	return thread_param;
     }
     usleep(thread_func_args->wait_release * 1000); 					//sleep wait_retreive milliseconds
