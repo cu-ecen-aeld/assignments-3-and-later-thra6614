@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <
 int main(int argc, char *argv[])
 {
 
@@ -14,7 +15,7 @@ int main(int argc, char *argv[])
 	}
 	const char * filepath = argv[1];
 	char * file_str = argv[2];
-	int fd = open(filepath, O_RDWR|O_CREAT|O_TRUNC|O_NONBLOCK, S_IRWXU|S_IRWXG|S_IRWXO);
+	int fd = open(filepath, O_RDWR|O_CREAT|O_TRUNC|O_NONBLOCK, 0644);
 	char buff[1];
 	if(fd == -1)
 	{
