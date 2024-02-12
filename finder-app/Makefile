@@ -2,8 +2,8 @@ CC = $(CROSS_COMPILE)gcc
 
 FLAGS = -g -Wall
 
-all: writer
-writer.o: writer.c
+
+all: writer.c
 	$(CC) $(FLAGS) writer.c -o writer
 
 .PHONY : clean
