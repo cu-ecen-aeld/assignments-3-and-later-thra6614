@@ -1,4 +1,5 @@
-# echo "hello_world" > /dev/faulty
+#FAULTY code output
+.# echo "hello_world" > /dev/faulty
 Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000
 Mem abort info:
   ESR = 0x96000045
@@ -42,4 +43,6 @@ Call trace:
 Code: d2800001 d2800000 d503233f d50323bf (b900003f) 
 ---[ end trace 93cc863b9dabfd26 ]---
 
-
+#Analysis
+This output can be used to find the faulty line by locating the virtual address of the fault at line 1 of the output (0x0000000000000000) (indicates a possible null pointer reference).
+This code can also identify the instruction address of the error with the classification of pc. It lists that 0x14 bytes (20 bytes decimal) into the 0x20 (32 decimal) byte long faulty_write function in the "faulty" module.
