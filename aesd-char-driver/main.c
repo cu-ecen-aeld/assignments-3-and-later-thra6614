@@ -18,6 +18,7 @@
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
 #include "linux/slab.h"
 
 int aesd_major =   0; // use dynamic major
@@ -61,7 +62,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     /**
      * TODO: handle read
      */
-    
+
 
     if(!filp || !buf || !f_pos) //invalid inputs
     {
@@ -225,17 +226,39 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     mutex_unlock(&cir_buff->lock);
     return retval;
 }
-loof_t * llseek(struct file * filp, loff_t offset, int whence)
+loff_t llseek(struct file * filp, loff_t offset, int whence)
 {
-    struct mutex lock;
-    mutex_init(&lock);
-    if(mutex_lock_interruptible(&lock) != 0) //lock mutex
+
+    struct aesd_dev *ptr_to_size = filp->private_data;
+    loff_t fixed_output;
+    if(mutex_lock_interruptible(&(aesd_device.lock)) != 0) //lock mutex
     {
         PDEBUG("Error: mutex could not lock properly");
-        return -1; 
+        return -ERESTARTSYS; 
     }
-    mutex_unlock(&lock);
-
+    fixed_output = fixed_size_llseek(filp, offset, whence, ptr_to_size->buf_size);
+    mutex_unlock(&(aesd_device.lock));
+    return fixed_output;
+}
+loff_t ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
+{
+    uint32_t retval;
+    switch(cmd)
+    {
+        case AESDCHAR_IOCSEEKTO:
+        struct aesd_seekto seekto;
+        if(copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0 )
+        {
+            retval = EFAULT;
+        }
+        else
+        {
+            retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+            
+        }
+        break;
+    }
+    
 }
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
@@ -243,6 +266,8 @@ struct file_operations aesd_fops = {
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+    .llseek =   llseek,
+    .unlocked_ioctl = ioctl_support
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
