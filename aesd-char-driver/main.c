@@ -285,7 +285,10 @@ long ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
     uint32_t retval = 0;
     struct aesd_seekto seekto;
     //invalid cmd input
-
+    if(cmd > AESDCHAR_IOC_MAXNR)
+    {
+        return -ENOTTY;
+    }
     //command checking
     switch(cmd)
     {
@@ -293,7 +296,7 @@ long ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
             
             if(copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0 )
             {
-                retval = EFAULT;
+                retval = -EFAULT;
             }
             else
             {

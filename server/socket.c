@@ -119,7 +119,53 @@ void *handleClient ( void *arg )
     // Receive data from the client
     while ( ( bytesReceived = recv( clientSocket, buffer, sizeof( buffer ), 0 ) ) > 0 )
     {
-        pthread_mutex_lock( &mutex );
+        char str_compare[] = "AESDCHAR_IOCSEEKTO:";
+        bool cmd_found = false;
+        unsigned int x = 0;
+        unsigned int y = 0;
+        if(strncmp(str_compare, buffer, 20) == 0)
+        {
+            cmd_found = true;
+            int buf_idx;
+            int y_idx;
+            for(buf_idx = 20; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
+            {
+                cmd_found = false;
+                if(buffer[buf_idx] >= '0' || buffer[buf_idx] <= '9')
+                {
+                    x = x * 10 + (buffer[buf_idx] - '0');
+                }
+                else if(buffer[buf_idx] == ',')
+                {
+                    cmd_found = true;
+                    y_idx = buf_idx + 1;
+                    break;
+                }
+                else
+                {
+                    break;
+                }
+                
+            }
+            if(cmd_found)
+            {
+                for(buf_idx; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
+                {
+                    if(buffer[buf_idx] >= '0' || buffer[buf_idx] <= '9')
+                    {
+                        y = y * 10 + (buffer[buf_idx] - '0');
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+
+            printf("found cmd\n");
+        }
+
+        pthread_mutex_lock(&mutex);
         int fd = open(DATA_FILE, O_CREAT | O_RDWR | O_APPEND, 0744);
         if (fd == -1) {
             // Handle error
