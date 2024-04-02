@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 #define USE_AESD_CHAR_DEVICE 1
 
@@ -149,7 +150,7 @@ void *handleClient ( void *arg )
             }
             if(cmd_found)
             {
-                for(buf_idx; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
+                for(buf_idx = y_idx; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
                 {
                     if(buffer[buf_idx] >= '0' || buffer[buf_idx] <= '9')
                     {
@@ -162,7 +163,7 @@ void *handleClient ( void *arg )
                 }
             }
 
-            printf("found cmd\n");
+            printf("found cmd, %d,%d\n", x, y);
         }
 
         pthread_mutex_lock(&mutex);
@@ -176,29 +177,46 @@ void *handleClient ( void *arg )
             pthread_exit(NULL);
         }
 
-        // Convert file descriptor to file pointer
-        filePointer = fdopen(fd, "a");
-        if (filePointer == NULL) {
-            // Handle error
-            syslog(LOG_ERR, "Failed to convert file descriptor to file pointer");
-            close(fd);
-            pthread_mutex_unlock(&mutex);
-            close(clientSocket);
-            threadInfo->threadComplete = true;
-            pthread_exit(NULL);
+        //valid AESDCHAR_IOCSEEKTO cmd sent
+        if(cmd_found)
+        {
+            struct aesd_seekto seekto;
+            seekto.write_cmd = x;
+            seekto.write_cmd_offset = y;
+            int result_ret = ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+            if(result_ret != 0)
+            {
+                syslog(LOG_ERR, "Failed IOCTL");
+            }
+
+
         }
+        else
+        {
+            // Convert file descriptor to file pointer
+            filePointer = fdopen(fd, "a");
+            if (filePointer == NULL) {
+                // Handle error
+                syslog(LOG_ERR, "Failed to convert file descriptor to file pointer");
+                close(fd);
+                pthread_mutex_unlock(&mutex);
+                close(clientSocket);
+                threadInfo->threadComplete = true;
+                pthread_exit(NULL);
+            }
 
-        // Write the received data to the file
-        fwrite( buffer, 1, bytesReceived, filePointer );
-        fclose( filePointer );
-
+            // Write the received data to the file
+            fwrite( buffer, 1, bytesReceived, filePointer );
+            fclose( filePointer );
+        }
         pthread_mutex_unlock( &mutex );
 
         // Check for newline character to indicate end of packet
         if ( memchr( buffer, '\n', bytesReceived ) != NULL )
         {
             break;
-        }
+        }            
+        
     }
 
     pthread_mutex_lock( &mutex );

@@ -289,6 +289,7 @@ long ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
     {
         return -ENOTTY;
     }
+    
     //command checking
     switch(cmd)
     {
