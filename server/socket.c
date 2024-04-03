@@ -188,7 +188,6 @@ void *handleClient ( void *arg )
                 syslog(LOG_ERR, "Failed IOCTL Result = %ld", result_ret);
                 syslog( LOG_ERR, "Failed to perform seek operation: %s", strerror(errno));
             }
-            printf( "IOCTL: FPOS: %ld %d %d\n", lseek( fd, 0, SEEK_CUR ), x, y );
 
         }
         else

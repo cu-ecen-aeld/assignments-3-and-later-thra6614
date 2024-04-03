@@ -32,12 +32,14 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     /**
     * TODO: implement per description
     */
+    uint32_t offset_counter = 0;
+    uint32_t i;
     if(!buffer) //invalid input
     {
         return NULL;
     }
-    uint32_t offset_counter = 0;
-    uint32_t i = buffer->out_offs;
+    
+    i = buffer->out_offs;
     while (i != buffer->in_offs || (buffer->full && offset_counter == 0)) //loop through buffer until reaching last value in buffer
     {
         if(offset_counter +  buffer->entry[i].size > char_offset) //check if buffer->entry contains offset byte
