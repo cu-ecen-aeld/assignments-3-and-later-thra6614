@@ -284,8 +284,7 @@ long ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
 {
     uint32_t retval = 0;
     struct aesd_seekto seekto;
-    //invalid cmd input
-    if(cmd > AESDCHAR_IOC_MAXNR)
+    if((_IOC_TYPE(cmd) != AESD_IOC_MAGIC) || (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)) //check for invalid cmd
     {
         return -ENOTTY;
     }
