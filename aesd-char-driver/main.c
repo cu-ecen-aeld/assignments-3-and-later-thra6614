@@ -18,6 +18,7 @@
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
 #include "linux/slab.h"
 
 int aesd_major =   0; // use dynamic major
@@ -61,7 +62,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     /**
      * TODO: handle read
      */
-    
+
 
     if(!filp || !buf || !f_pos) //invalid inputs
     {
@@ -225,12 +226,98 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     mutex_unlock(&cir_buff->lock);
     return retval;
 }
+
+loff_t llseek(struct file * filp, loff_t offset, int whence)
+{
+
+    struct aesd_dev *ptr_to_size = filp->private_data;
+    loff_t fixed_output;
+    if(mutex_lock_interruptible(&(aesd_device.lock)) != 0) //lock mutex
+    {
+        PDEBUG("Error: mutex could not lock properly");
+        return -ERESTARTSYS; 
+    }
+    fixed_output = fixed_size_llseek(filp, offset, whence, ptr_to_size->buf_size);
+    mutex_unlock(&(aesd_device.lock));
+    return fixed_output;
+}
+
+static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset)
+{
+    long retval = 0;
+    loff_t new_f_pos;
+    unsigned int i = 0;
+    struct aesd_dev *cir_buff = NULL;
+    if(write_cmd >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) //check if invalid write_cmd index
+    {
+        PDEBUG("Error: write_cmd too big");
+        return -EINVAL;
+    }
+
+    if(mutex_lock_interruptible(&(aesd_device.lock)) != 0) //lock mutex
+    {
+        PDEBUG("Error: mutex could not lock properly");
+        return -ERESTARTSYS; 
+    }
+    cir_buff = filp->private_data;
+    
+    if(write_cmd_offset >= cir_buff->buffer.entry[write_cmd].size) //check if offset too big
+    {
+        PDEBUG("Error: write_cmd_offset too big for write_cmd");
+        retval = -EINVAL;
+        goto unlock;
+    }    
+
+    new_f_pos = 0;
+    for(i = 0; i < write_cmd; i++)
+    {
+        new_f_pos += (loff_t)cir_buff->buffer.entry[i].size;
+    }
+    new_f_pos += (loff_t)write_cmd_offset;
+    filp->f_pos = new_f_pos;
+    unlock:
+    mutex_unlock(&(aesd_device.lock));
+    return retval;
+}
+
+long ioctl_support(struct file * filp, unsigned int cmd, unsigned long arg)
+{
+    uint32_t retval = 0;
+    struct aesd_seekto seekto;
+    if((_IOC_TYPE(cmd) != AESD_IOC_MAGIC) || (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)) //check for invalid cmd
+    {
+        return -ENOTTY;
+    }
+    
+    //command checking
+    switch(cmd)
+    {
+        case AESDCHAR_IOCSEEKTO:
+            
+            if(copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0 )
+            {
+                retval = -EFAULT;
+            }
+            else
+            {
+                retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+                
+            }
+            break;
+        default:
+            retval = -ENOTTY;
+            break;
+    }
+    return retval;
+}
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+    .llseek =   llseek,
+    .unlocked_ioctl = ioctl_support
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)

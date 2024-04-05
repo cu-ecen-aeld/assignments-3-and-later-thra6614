@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 #define USE_AESD_CHAR_DEVICE 1
 
@@ -40,6 +41,8 @@ int serverSocket;
 FILE *filePointer;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t timestampThread;
+struct aesd_seekto seekto;
+int fd;
 
 // Structure to hold thread information
 struct ThreadInfo
@@ -115,12 +118,132 @@ void *handleClient ( void *arg )
     // Declare buffer and variables for receiving data from the client
     char buffer[1024];
     ssize_t bytesReceived;
-
+    bool cmd_found = false;
+    fd = open(DATA_FILE, O_CREAT | O_RDWR | O_APPEND, 0744);
+    if (fd == -1) {
+        // Handle error
+        syslog(LOG_ERR, "Failed to open file %s: %s", DATA_FILE, strerror(errno));
+        pthread_mutex_unlock(&mutex);
+        close(clientSocket);
+        threadInfo->threadComplete = true;
+        pthread_exit(NULL);
+    }
     // Receive data from the client
     while ( ( bytesReceived = recv( clientSocket, buffer, sizeof( buffer ), 0 ) ) > 0 )
     {
-        pthread_mutex_lock( &mutex );
-        int fd = open(DATA_FILE, O_CREAT | O_RDWR | O_APPEND, 0744);
+        
+        char str_compare[] = "AESDCHAR_IOCSEEKTO:";
+        cmd_found = false;
+        unsigned int x = 0;
+        unsigned int y = 0;
+        if(strncmp(str_compare, buffer, 19) == 0)
+        {
+            int buf_idx;
+            int y_idx;
+            for(buf_idx = 19; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
+            {
+                cmd_found = false;
+                if(buffer[buf_idx] >= '0' && buffer[buf_idx] <= '9')
+                {
+                    x = (buffer[buf_idx] - '0');
+                }
+                else if(buffer[buf_idx] == ',')
+                {
+                    cmd_found = true;
+                    y_idx = buf_idx + 1;
+                    break;
+                }
+                else
+                {
+                    break;
+                }
+                
+            }
+            if(cmd_found)
+            {
+                for(buf_idx = y_idx; (buffer[buf_idx] != '\0') && (buf_idx < sizeof(buffer)); buf_idx++)
+                {
+                    if(buffer[buf_idx] >= '0' && buffer[buf_idx] <= '9')
+                    {
+                        y = (buffer[buf_idx] - '0');
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        pthread_mutex_lock(&mutex);
+        //valid AESDCHAR_IOCSEEKTO cmd sent
+        if(cmd_found)
+        {
+            
+            seekto.write_cmd = x;
+            seekto.write_cmd_offset = y;
+            long result_ret = ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+            if(result_ret != 0)
+            {
+                syslog(LOG_ERR, "Failed IOCTL Result = %ld", result_ret);
+                syslog( LOG_ERR, "Failed to perform seek operation: %s", strerror(errno));
+            }
+
+        }
+        else
+        {
+            // Convert file descriptor to file pointer
+            
+            // filePointer = fdopen(fd, "a");
+            // if (filePointer == NULL) {
+            //     // Handle error
+            //     syslog(LOG_ERR, "Failed to convert file descriptor to file pointer");
+            //     close(fd);
+            //     pthread_mutex_unlock(&mutex);
+            //     close(clientSocket);
+            //     threadInfo->threadComplete = true;
+            //     pthread_exit(NULL);
+            // }
+
+            // Write the received data to the file
+            // fwrite( buffer, 1, bytesReceived, filePointer );
+            if ( write( fd, buffer, bytesReceived ) == -1 )
+            {
+                // Handle error
+                syslog( LOG_ERR, "Failed to write to file %s: %s", DATA_FILE, strerror( errno ) );
+                close( fd );
+                pthread_mutex_unlock( &mutex );
+                close( clientSocket );
+                threadInfo->threadComplete = true;
+                pthread_exit( NULL );
+            }
+            close( fd );
+        }
+        pthread_mutex_unlock( &mutex );
+
+        // Check for newline character to indicate end of packet
+        if ( memchr( buffer, '\n', bytesReceived ) != NULL )
+        {
+            break;
+        }            
+        
+    }
+
+    pthread_mutex_lock( &mutex );
+    // Open the file in read mode to send the content back to the client
+    if(!cmd_found)
+    {
+        // filePointer = fopen( DATA_FILE, "r" );
+        // if ( filePointer == NULL )
+        // {
+        //     // Log an error message if the file cannot be opened
+        //     syslog( LOG_ERR, "Failed to open file %s: %s", DATA_FILE, strerror( errno ) );
+        //     pthread_mutex_unlock( &mutex );
+        //     close( clientSocket );
+        //     threadInfo->threadComplete = true;
+        //     pthread_exit( NULL );
+        // }
+        fd = open(DATA_FILE, O_RDWR);
         if (fd == -1) {
             // Handle error
             syslog(LOG_ERR, "Failed to open file %s: %s", DATA_FILE, strerror(errno));
@@ -129,53 +252,23 @@ void *handleClient ( void *arg )
             threadInfo->threadComplete = true;
             pthread_exit(NULL);
         }
-
-        // Convert file descriptor to file pointer
-        filePointer = fdopen(fd, "a");
-        if (filePointer == NULL) {
-            // Handle error
-            syslog(LOG_ERR, "Failed to convert file descriptor to file pointer");
-            close(fd);
-            pthread_mutex_unlock(&mutex);
-            close(clientSocket);
-            threadInfo->threadComplete = true;
-            pthread_exit(NULL);
-        }
-
-        // Write the received data to the file
-        fwrite( buffer, 1, bytesReceived, filePointer );
-        fclose( filePointer );
-
-        pthread_mutex_unlock( &mutex );
-
-        // Check for newline character to indicate end of packet
-        if ( memchr( buffer, '\n', bytesReceived ) != NULL )
+        // Sending the full content of the file to the client
+        // while ( ( bytesReceived = fread( buffer, 1, sizeof( buffer ), filePointer ) ) > 0 )
+        // {
+        //     send( clientSocket, buffer, bytesReceived, 0 );
+        // }
+        // fclose( filePointer );
+    }
+    // else
+    // {
+        // Sending the full content of the file to the client
+        while ( ( bytesReceived = read( fd, buffer, sizeof( buffer ) ) ) > 0 )
         {
-            break;
+            send( clientSocket, buffer, bytesReceived, 0 );
         }
-    }
-
-    pthread_mutex_lock( &mutex );
-    // Open the file in read mode to send the content back to the client
-    filePointer = fopen( DATA_FILE, "r" );
-    if ( filePointer == NULL )
-    {
-        // Log an error message if the file cannot be opened
-        syslog( LOG_ERR, "Failed to open file %s: %s", DATA_FILE, strerror( errno ) );
-        pthread_mutex_unlock( &mutex );
-        close( clientSocket );
-        threadInfo->threadComplete = true;
-        pthread_exit( NULL );
-    }
-
-    // Sending the full content of the file to the client
-    while ( ( bytesReceived = fread( buffer, 1, sizeof( buffer ), filePointer ) ) > 0 )
-    {
-        send( clientSocket, buffer, bytesReceived, 0 );
-    }
-
-    // Close the file
-    fclose( filePointer );
+        close(fd);
+    // }    
+    
     pthread_mutex_unlock( &mutex );
 
     // Close the client socket
